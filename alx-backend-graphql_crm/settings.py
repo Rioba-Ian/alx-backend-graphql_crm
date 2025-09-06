@@ -12,6 +12,15 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 
+import environ
+from celery.schedules import crontab
+
+env = environ.Env(
+    DEBUG=(bool, False)
+    SECRET_KEY=(str, "SECRET_KEY"),
+    ALLOWED_HOSTS=(list, ['*']),
+)
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -20,12 +29,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-w1_a978ncq-&dn=g!lv8yfb5@(rxzh-q^tov$+za^f-d0j(fru"
+SECRET_KEY = env("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = env("DEBUG")
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = env("ALLOWED_HOSTS")
 
 
 # Application definition
@@ -40,6 +49,9 @@ INSTALLED_APPS = [
     "graphene_django",
     "django_filters",
     "crm",
+    "django_crontab",
+    "django_celery_beat",
+    "celery",
 ]
 
 GRAPHENE = {
@@ -128,3 +140,34 @@ STATIC_URL = "static/"
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+GRAPHENE = {
+    "SCHEMA": "alx_backend_graphql_crm.schema.schema",  # Path
+}
+
+CRONJOBS = [
+    ("0 2 * * 0", "crm.cron_jobs.clean_inactive_customers"),  # Every Sunday at 2 AM
+    ("0 8 * * *", "crm.cron_jobs.send_order_reminders"),  # Daily at 8 AM
+]
+
+# Cron logging
+CRONTAB_COMMAND_PREFIX = f"source {BASE_DIR}/venv/bin/activate && cd {BASE_DIR} &&"
+CRONTAB_COMMAND_SUFFIX = "2>&1"
+
+# Celery Configuration
+CELERY_BROKER_URL = "redis://localhost:6379/0"
+CELERY_RESULT_BACKEND = "redis://localhost:6379/0"
+CELERY_ACCEPT_CONTENT = ["application/json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = "UTC"
+
+# Celery Beat Configuration
+CELERY_BEAT_SCHEDULE = {
+    "generate-crm-report": {
+        "task": "crm.tasks.generate_crm_report",
+        "schedule": crontab(
+            day_of_week="mon", hour=6, minute=0
+        ),  # Run every Monday at 6 AM
+    },
+}
